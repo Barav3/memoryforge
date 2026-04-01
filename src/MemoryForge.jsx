@@ -628,7 +628,7 @@ function AuthView() {
     setLoading(true);
     const t = setInterval(() => setSeg((s) => Math.min(s + 1, 12)), 80);
     await supabase.auth.signInWithOAuth({
-      provider: "github",
+      provider: "google",
       options: { redirectTo: window.location.origin },
     });
     clearInterval(t);
