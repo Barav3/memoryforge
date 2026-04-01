@@ -465,38 +465,147 @@ export default function MemoryForge() {
           .fade-in{animation:fadeUp .3s ease both}
           .blink{animation:blink 1.2s step-end infinite}
           .glitch{animation:glitch 4s infinite}
+
+          /* ── RESPONSIVE LAYOUT ── */
+
+          /* Sidebar: full on desktop, icon-rail on tablet, drawer on mobile */
+          .mf-sidebar{ width:200px; flex-shrink:0; }
+          .mf-sidebar-label{ display:block; }
+          .mf-sidebar-logo-sub{ display:block; }
+          .mf-view-pad{ padding:40px 44px; }
+          .mf-stats-grid{ grid-template-columns:repeat(4,1fr); }
+          .mf-preset-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+          .mf-two-col{ grid-template-columns:1fr 1fr; }
+          .mf-discover-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+          .mf-card-max{ max-width:940px; }
+          .mf-hamburger{ display:none; }
+          .mf-nav-overlay{ display:none; }
+
+          /* Wide screens (≥1440px) — give the sidebar more breathing room */
+          @media(min-width:1440px){
+            .mf-sidebar{ width:230px; }
+            .mf-view-pad{ padding:48px 60px; }
+            .mf-preset-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); }
+            .mf-card-max{ max-width:1100px; }
+          }
+
+          /* Tablet (640–1023px) — collapse sidebar to 52px icon rail */
+          @media(max-width:1023px) and (min-width:640px){
+            .mf-sidebar{ width:52px; }
+            .mf-sidebar-label{ display:none; }
+            .mf-sidebar-logo-sub{ display:none; }
+            .mf-view-pad{ padding:24px 28px; }
+            .mf-stats-grid{ grid-template-columns:repeat(2,1fr); }
+            .mf-preset-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+            .mf-two-col{ grid-template-columns:1fr; }
+            .mf-discover-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .mf-card-max{ max-width:100%; }
+          }
+
+          /* Mobile (< 640px) — hamburger + slide-in drawer */
+          @media(max-width:639px){
+            .mf-sidebar{ display:none; }
+            .mf-hamburger{
+              display:flex; align-items:center; gap:10px;
+              position:fixed; top:0; left:0; right:0; z-index:200;
+              background:${C.border}; padding:10px 16px;
+              font-family:'Press Start 2P',monospace; font-size:9px; color:#FFF;
+              border-bottom:2px solid ${C.border};
+            }
+            .mf-nav-open{
+              display:flex; flex-direction:column;
+              position:fixed; inset:0; z-index:300;
+              background:${C.panel}; overflow-y:auto;
+            }
+            .mf-view-pad{ padding:60px 16px 24px; }
+            .mf-stats-grid{ grid-template-columns:repeat(2,1fr); }
+            .mf-preset-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+            .mf-two-col{ grid-template-columns:1fr; }
+            .mf-discover-grid{ grid-template-columns:1fr; }
+            .mf-card-max{ max-width:100%; }
+          }
         `}</style>
 
-        {/* ── SIDEBAR ─────────────────────────────────────── */}
-        <aside style={{ width:200, flexShrink:0, background:C.panel, borderRight:`2px solid ${C.border}`, display:"flex", flexDirection:"column", transition:"background .3s,border-color .3s" }}>
+        {/* ── MOBILE HAMBURGER BAR ───────────────────────── */}
+        {(() => {
+          const [navOpen, setNavOpen] = useState(false);
+          const NAV_ITEMS = [
+            { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
+            { id:"study",     label:"STUDY.EXE", icon:"▶" },
+            { id:"discover",  label:"DISCOVER",  icon:"◎" },
+            { id:"creator",   label:"CREATOR",   icon:"✦" },
+            { id:"library",   label:"LIBRARY",   icon:"⊞" },
+            { id:"theme",     label:"⬡ THEME",   icon:"◈" },
+          ];
+          return (
+            <>
+              <div className="mf-hamburger" onClick={()=>setNavOpen(true)}>
+                <span style={{ fontSize:14 }}>☰</span>
+                <span>MEMORYFORGE</span>
+              </div>
+              {navOpen && (
+                <div className="mf-nav-open">
+                  <div style={{ background:C.border, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                    <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:10, color:"#FFF" }}>MEMORYFORGE</div>
+                    <button onClick={()=>setNavOpen(false)} style={{ background:"none",border:"none",color:"#FFF",fontSize:22,cursor:"pointer" }}>×</button>
+                  </div>
+                  {NAV_ITEMS.map((item)=>(
+                    <button key={item.id} onClick={()=>{ navTo(item.id); setNavOpen(false); }} style={{
+                      display:"block",width:"100%",textAlign:"left",padding:"16px 20px",
+                      fontFamily:"'Press Start 2P',monospace",fontSize:8,letterSpacing:0.5,
+                      color:view===item.id?C.panel:C.text,background:view===item.id?C.border:"transparent",
+                      border:"none",borderBottom:`1px solid ${C.border}30`,cursor:"pointer",
+                    }}>{item.icon} {item.label}</button>
+                  ))}
+                  <div style={{ padding:"16px 20px", marginTop:"auto", borderTop:`2px solid ${C.border}` }}>
+                    <div style={{ fontFamily:"monospace",fontSize:12,color:C.text,marginBottom:12 }}>
+                      {user.user_metadata?.full_name||user.email?.split("@")[0]||"USER"}
+                    </div>
+                    <button onClick={()=>supabase.auth.signOut()} style={{ fontFamily:"'Press Start 2P',monospace",fontSize:6,color:C.pink,border:`1.5px solid ${C.pink}`,background:"transparent",padding:"6px 10px",cursor:"pointer" }}>SIGN OUT</button>
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
+
+        {/* ── SIDEBAR (tablet: icon rail / desktop: full) ─ */}
+        <aside className="mf-sidebar" style={{ background:C.panel, borderRight:`2px solid ${C.border}`, display:"flex", flexDirection:"column", transition:"background .3s,border-color .3s,width .2s" }}>
           <div style={{ background:C.border, padding:"16px 14px" }}>
-            <div className="glitch" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:11, color:"#FFFFFF", lineHeight:1.6, letterSpacing:0.5 }}>MEMORY<br/>FORGE</div>
-            <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:"#AABBFF", marginTop:6 }}>SM-2 ENGINE v3.0</div>
+            <div className="glitch" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:11, color:"#FFFFFF", lineHeight:1.6, letterSpacing:0.5 }}>M<span className="mf-sidebar-label">EMORY</span><br/>F<span className="mf-sidebar-label">ORGE</span></div>
+            <div className="mf-sidebar-logo-sub" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:"#AABBFF", marginTop:6 }}>SM-2 ENGINE v3.0</div>
           </div>
           <nav style={{ flex:1, padding:"12px 0" }}>
             {[
-              { id:"dashboard", label:"DASHBOARD" },
-              { id:"study",     label:"STUDY.EXE"  },
-              { id:"discover",  label:"DISCOVER"   },
-              { id:"creator",   label:"CREATOR"    },
-              { id:"library",   label:"LIBRARY"    },
-              { id:"theme",     label:"⬡ THEME"    },
+              { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
+              { id:"study",     label:"STUDY.EXE", icon:"▶" },
+              { id:"discover",  label:"DISCOVER",  icon:"◎" },
+              { id:"creator",   label:"CREATOR",   icon:"✦" },
+              { id:"library",   label:"LIBRARY",   icon:"⊞" },
+              { id:"theme",     label:"⬡ THEME",   icon:"◈" },
             ].map((item)=>(
-              <button key={item.id} onClick={()=>navTo(item.id)} style={{
-                display:"block", width:"100%", textAlign:"left", padding:"11px 16px",
+              <button key={item.id} onClick={()=>navTo(item.id)} title={item.label} style={{
+                display:"flex", alignItems:"center", gap:8,
+                width:"100%", textAlign:"left", padding:"11px 14px",
                 fontFamily:"'Press Start 2P',monospace", fontSize:7, letterSpacing:0.5, lineHeight:1,
                 color:view===item.id?C.panel:C.text, background:view===item.id?C.border:"transparent",
                 border:"none", borderLeft:view===item.id?`4px solid ${C.cyan}`:"4px solid transparent",
-                cursor:"pointer", transition:"all .12s",
-              }}>{item.label}</button>
+                cursor:"pointer", transition:"all .12s", whiteSpace:"nowrap", overflow:"hidden",
+              }}>
+                <span style={{ flexShrink:0, fontSize:12 }}>{item.icon}</span>
+                <span className="mf-sidebar-label">{item.label}</span>
+              </button>
             ))}
           </nav>
           <div style={{ borderTop:`2px solid ${C.border}`, padding:"12px 14px" }}>
-            <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.textSub, marginBottom:5 }}>LOGGED IN AS</div>
-            <div style={{ fontFamily:"monospace", fontSize:11, color:C.text, marginBottom:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            <div className="mf-sidebar-label" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.textSub, marginBottom:5 }}>LOGGED IN AS</div>
+            <div className="mf-sidebar-label" style={{ fontFamily:"monospace", fontSize:11, color:C.text, marginBottom:10, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {user.user_metadata?.full_name||user.email?.split("@")[0]||"USER"}
             </div>
-            <button onClick={()=>supabase.auth.signOut()} style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.pink, border:`1.5px solid ${C.pink}`, background:"transparent", padding:"5px 8px", cursor:"pointer" }}>SIGN OUT</button>
+            <button onClick={()=>supabase.auth.signOut()} title="Sign out" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.pink, border:`1.5px solid ${C.pink}`, background:"transparent", padding:"5px 8px", cursor:"pointer" }}>
+              <span className="mf-sidebar-label">SIGN OUT</span>
+              <span style={{ display:"none" }} className="mf-sidebar-icon">⏻</span>
+            </button>
           </div>
         </aside>
 
@@ -599,10 +708,10 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
   };
 
   return (
-    <div style={{ padding:"40px 44px", maxWidth:1020 }} className="fade-in">
+    <div className="mf-view-pad mf-card-max fade-in" style={{ maxWidth:1020 }}>
       <Win title={`${greeting} SESSION`} style={{ marginBottom:28 }}>
-        <div style={{ padding:"18px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-          <div style={{ fontFamily:"'VT323',monospace", fontSize:36, color:C.text, lineHeight:1 }}>
+        <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+          <div style={{ fontFamily:"'VT323',monospace", fontSize:32, color:C.text, lineHeight:1 }}>
             {due>0?<><span style={{ color:C.border }}>{due}</span> CARD{due!==1?"S":""} READY</>:"ALL CAUGHT UP!"}
           </div>
           <PixelBtn onClick={()=>navTo("study")} color={C.green}>START.EXE →</PixelBtn>
@@ -610,7 +719,7 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
       </Win>
 
       {/* Stats */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:28 }}>
+      <div className="mf-stats-grid" style={{ display:"grid", gap:12, marginBottom:24 }}>
         {[
           { label:"DUE TODAY", val:due,         color:C.pink   },
           { label:"TOTAL",     val:cards.length, color:C.border },
@@ -625,7 +734,7 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
         ))}
       </div>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+      <div className="mf-two-col" style={{ display:"grid", gap:20 }}>
         {/* Session config */}
         <Win title="SESSION CONFIG">
           <div style={{ padding:"20px" }}>
@@ -910,10 +1019,10 @@ function DiscoverView({ onImport, userId }) {
   };
 
   return (
-    <div style={{ padding:"40px 44px" }} className="fade-in">
+    <div className="mf-view-pad fade-in">
       <Win title="DISCOVER — COMMUNITY DECKS" style={{ marginBottom:20 }}>
-        <div style={{ padding:"16px 20px", display:"flex", gap:14, alignItems:"center" }}>
-          <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="SEARCH COMMUNITY DECKS..." style={{ flex:1 }} />
+        <div style={{ padding:"16px 20px", display:"flex", gap:14, alignItems:"center", flexWrap:"wrap" }}>
+          <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="SEARCH COMMUNITY DECKS..." style={{ flex:1, minWidth:160 }} />
           <span style={{ fontFamily:"'Press Start 2P',monospace", fontSize:7, color:C.textSub, whiteSpace:"nowrap" }}>
             {pubDecks.length} PUBLISHED
           </span>
@@ -931,14 +1040,14 @@ function DiscoverView({ onImport, userId }) {
           </div>
         </Win>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:16 }}>
+        <div className="mf-discover-grid" style={{ display:"grid", gap:14 }}>
           {pubDecks.map((pub)=>{
             const isOwn = pub.user_id===userId;
             return (
               <Win key={pub.id} title={pub.deck_name.toUpperCase().slice(0,22)} controls={false}
                 style={{ borderLeft:`5px solid ${pub.deck_color||C.border}` }}>
-                <div style={{ padding:"16px" }}>
-                  <div style={{ fontSize:28, marginBottom:8 }}>{pub.deck_emoji||"📚"}</div>
+                <div style={{ padding:"14px" }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>{pub.deck_emoji||"📚"}</div>
                   {pub.deck_description&&(
                     <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub, marginBottom:10, lineHeight:1.5 }}>
                       {pub.deck_description.slice(0,80)}
@@ -1003,7 +1112,7 @@ function ThemeView({ themeConfig, onUpdate }) {
   const cur = { ...DEFAULT_CUSTOM, ...themeConfig.custom };
 
   return (
-    <div style={{ padding:"40px 44px", maxWidth:940 }} className="fade-in">
+    <div className="mf-view-pad mf-card-max fade-in">
       {/* Header */}
       <Win title="⬡ THEME SETTINGS" style={{ marginBottom:24 }}>
         <div style={{ padding:"16px 22px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -1014,9 +1123,8 @@ function ThemeView({ themeConfig, onUpdate }) {
         </div>
       </Win>
 
-      {/* Preset grid — each card is a live mini-preview */}
       <Win title="PRESETS" style={{ marginBottom:24 }}>
-        <div style={{ padding:"20px", display:"grid", gridTemplateColumns:"repeat(3,minmax(0,1fr))", gap:14 }}>
+        <div className="mf-preset-grid" style={{ padding:"16px", display:"grid" }}>
           {Object.entries(PRESETS).map(([key, preset])=>{
             const active = themeConfig.preset===key;
             return (
@@ -1028,25 +1136,25 @@ function ThemeView({ themeConfig, onUpdate }) {
                 transition:"all .12s", overflow:"hidden",
               }}>
                 {/* Mini titlebar */}
-                <div style={{ background:preset.border, padding:"5px 10px", display:"flex", gap:5, alignItems:"center" }}>
-                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:"#FFFFFF", flex:1 }}>{preset.name}</div>
+                <div style={{ background:preset.border, padding:"4px 8px", display:"flex", gap:4, alignItems:"center" }}>
+                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:"#FFFFFF", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{preset.name}</div>
                   {[preset.cyan,preset.green,preset.pink].map((col,i)=>(
-                    <div key={i} style={{ width:9, height:9, background:col, border:"1px solid #FFFFFF40" }} />
+                    <div key={i} style={{ width:8, height:8, background:col, flexShrink:0 }} />
                   ))}
                 </div>
-                {/* Mini content with accent swatches */}
-                <div style={{ padding:"10px 12px" }}>
-                  <div style={{ display:"flex", gap:5, marginBottom:6 }}>
+                {/* Swatches + rating bars */}
+                <div style={{ padding:"8px 10px" }}>
+                  <div style={{ display:"flex", gap:4, marginBottom:5 }}>
                     {[preset.border,preset.cyan,preset.green,preset.gold,preset.pink,preset.purple].map((col,i)=>(
-                      <div key={i} style={{ width:16, height:16, background:col }} />
+                      <div key={i} style={{ width:14, height:14, background:col }} />
                     ))}
                   </div>
-                  <div style={{ fontFamily:"'VT323',monospace", fontSize:14, color:preset.text }}>
+                  <div style={{ fontFamily:"'VT323',monospace", fontSize:13, color:preset.text, marginBottom:4 }}>
                     AGAIN / HARD / GOOD / EASY
                   </div>
-                  <div style={{ display:"flex", gap:4, marginTop:4 }}>
+                  <div style={{ display:"flex", gap:3 }}>
                     {[preset.again,preset.hard,preset.good,preset.easy].map((col,i)=>(
-                      <div key={i} style={{ height:6, flex:1, background:col }} />
+                      <div key={i} style={{ height:5, flex:1, background:col }} />
                     ))}
                   </div>
                 </div>
@@ -1130,7 +1238,7 @@ function CreatorView({ decks, onCardCreate, onCardUpdate, editingCard, setEditin
   const fStyle = { width:"100%", resize:"vertical", lineHeight:1.65, minHeight:110 };
 
   return (
-    <div style={{ padding:"40px 44px", maxWidth:900 }} className="fade-in">
+    <div className="mf-view-pad mf-card-max fade-in">
       <Win title={editingCard?"EDIT CARD":"CREATE NEW CARD"} style={{ marginBottom:24 }}>
         <div style={{ padding:"18px 22px" }}>
           <div style={{ fontFamily:"'VT323',monospace", fontSize:22, color:C.textSub }}>
@@ -1142,7 +1250,7 @@ function CreatorView({ decks, onCardCreate, onCardUpdate, editingCard, setEditin
         </div>
       </Win>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+      <div className="mf-two-col" style={{ display:"grid", gap:20, marginBottom:20 }}>
         {[{label:"FRONT — QUESTION",val:front,set:setFront,ph:"Enter the question..."},{label:"BACK — ANSWER",val:back,set:setBack,ph:"Enter the answer..."}].map((f)=>(
           <Win key={f.label} title={f.label} controls={false}>
             <div style={{ padding:"14px" }}>
@@ -1153,7 +1261,7 @@ function CreatorView({ decks, onCardCreate, onCardUpdate, editingCard, setEditin
       </div>
 
       {preview && (
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+        <div className="mf-two-col" style={{ display:"grid", gap:20, marginBottom:20 }}>
           {[{label:"? PREVIEW FRONT",text:front},{label:"! PREVIEW BACK",text:back}].map((p)=>(
             <Win key={p.label} title={p.label} controls={false}>
               <div style={{ padding:"22px 24px", minHeight:100, display:"flex", alignItems:"center", justifyContent:"center", textAlign:"center" }}>
@@ -1165,7 +1273,7 @@ function CreatorView({ decks, onCardCreate, onCardUpdate, editingCard, setEditin
         </div>
       )}
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:24 }}>
+      <div className="mf-two-col" style={{ display:"grid", gap:20, marginBottom:24 }}>
         <Win title="DECK" controls={false}>
           <div style={{ padding:"14px" }}>
             <select value={deckId} onChange={(e)=>setDeckId(e.target.value)} style={{ width:"100%", cursor:"pointer" }}>
@@ -1207,7 +1315,7 @@ function LibraryView({ cards, decks, filterDeck, setFilterDeck, onDelete, onEdit
   });
 
   return (
-    <div style={{ padding:"40px 44px" }} className="fade-in">
+    <div className="mf-view-pad fade-in">
       <Win title="CARD LIBRARY" style={{ marginBottom:20 }}>
         <div style={{ padding:"16px 20px", display:"flex", gap:14, alignItems:"center" }}>
           <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="SEARCH CARDS..." style={{ flex:1 }} />
