@@ -370,6 +370,7 @@ export default function MemoryForge() {
   const [aiOpen, setAiOpen]             = useState(false);
   const [filterDeck, setFilterDeck]     = useState("all");
   const [themeConfig, setThemeConfig]   = useState({ preset:"digital", custom:DEFAULT_CUSTOM });
+  const [navOpen, setNavOpen]           = useState(false);
 
   const C = useMemo(()=>buildC(themeConfig), [themeConfig]);
   const saveThemeRef = useRef(null);
@@ -527,47 +528,41 @@ export default function MemoryForge() {
         `}</style>
 
         {/* ── MOBILE HAMBURGER BAR ───────────────────────── */}
-        {(() => {
-          const [navOpen, setNavOpen] = useState(false);
-          const NAV_ITEMS = [
-            { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
-            { id:"study",     label:"STUDY.EXE", icon:"▶" },
-            { id:"discover",  label:"DISCOVER",  icon:"◎" },
-            { id:"creator",   label:"CREATOR",   icon:"✦" },
-            { id:"library",   label:"LIBRARY",   icon:"⊞" },
-            { id:"theme",     label:"⬡ THEME",   icon:"◈" },
-          ];
-          return (
-            <>
-              <div className="mf-hamburger" onClick={()=>setNavOpen(true)}>
-                <span style={{ fontSize:14 }}>☰</span>
-                <span>MEMORYFORGE</span>
+        <div className="mf-hamburger" onClick={()=>setNavOpen(true)}>
+          <span style={{ fontSize:14 }}>☰</span>
+          <span>MEMORYFORGE</span>
+        </div>
+
+        {/* ── MOBILE NAV DRAWER ──────────────────────────── */}
+        {navOpen && (
+          <div className="mf-nav-open">
+            <div style={{ background:C.border, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:10, color:"#FFF" }}>MEMORYFORGE</div>
+              <button onClick={()=>setNavOpen(false)} style={{ background:"none",border:"none",color:"#FFF",fontSize:22,cursor:"pointer" }}>×</button>
+            </div>
+            {[
+              { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
+              { id:"study",     label:"STUDY.EXE", icon:"▶" },
+              { id:"discover",  label:"DISCOVER",  icon:"◎" },
+              { id:"creator",   label:"CREATOR",   icon:"✦" },
+              { id:"library",   label:"LIBRARY",   icon:"⊞" },
+              { id:"theme",     label:"⬡ THEME",   icon:"◈" },
+            ].map((item)=>(
+              <button key={item.id} onClick={()=>{ navTo(item.id); setNavOpen(false); }} style={{
+                display:"block", width:"100%", textAlign:"left", padding:"16px 20px",
+                fontFamily:"'Press Start 2P',monospace", fontSize:8, letterSpacing:0.5,
+                color:view===item.id?C.panel:C.text, background:view===item.id?C.border:"transparent",
+                border:"none", borderBottom:`1px solid ${C.border}30`, cursor:"pointer",
+              }}>{item.icon} {item.label}</button>
+            ))}
+            <div style={{ padding:"16px 20px", marginTop:"auto", borderTop:`2px solid ${C.border}` }}>
+              <div style={{ fontFamily:"monospace", fontSize:12, color:C.text, marginBottom:12 }}>
+                {user.user_metadata?.full_name||user.email?.split("@")[0]||"USER"}
               </div>
-              {navOpen && (
-                <div className="mf-nav-open">
-                  <div style={{ background:C.border, padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:10, color:"#FFF" }}>MEMORYFORGE</div>
-                    <button onClick={()=>setNavOpen(false)} style={{ background:"none",border:"none",color:"#FFF",fontSize:22,cursor:"pointer" }}>×</button>
-                  </div>
-                  {NAV_ITEMS.map((item)=>(
-                    <button key={item.id} onClick={()=>{ navTo(item.id); setNavOpen(false); }} style={{
-                      display:"block",width:"100%",textAlign:"left",padding:"16px 20px",
-                      fontFamily:"'Press Start 2P',monospace",fontSize:8,letterSpacing:0.5,
-                      color:view===item.id?C.panel:C.text,background:view===item.id?C.border:"transparent",
-                      border:"none",borderBottom:`1px solid ${C.border}30`,cursor:"pointer",
-                    }}>{item.icon} {item.label}</button>
-                  ))}
-                  <div style={{ padding:"16px 20px", marginTop:"auto", borderTop:`2px solid ${C.border}` }}>
-                    <div style={{ fontFamily:"monospace",fontSize:12,color:C.text,marginBottom:12 }}>
-                      {user.user_metadata?.full_name||user.email?.split("@")[0]||"USER"}
-                    </div>
-                    <button onClick={()=>supabase.auth.signOut()} style={{ fontFamily:"'Press Start 2P',monospace",fontSize:6,color:C.pink,border:`1.5px solid ${C.pink}`,background:"transparent",padding:"6px 10px",cursor:"pointer" }}>SIGN OUT</button>
-                  </div>
-                </div>
-              )}
-            </>
-          );
-        })()}
+              <button onClick={()=>supabase.auth.signOut()} style={{ fontFamily:"'Press Start 2P',monospace",fontSize:6,color:C.pink,border:`1.5px solid ${C.pink}`,background:"transparent",padding:"6px 10px",cursor:"pointer" }}>SIGN OUT</button>
+            </div>
+          </div>
+        )}
 
         {/* ── SIDEBAR (tablet: icon rail / desktop: full) ─ */}
         <aside className="mf-sidebar" style={{ background:C.panel, borderRight:`2px solid ${C.border}`, display:"flex", flexDirection:"column", transition:"background .3s,border-color .3s,width .2s" }}>
