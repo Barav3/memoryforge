@@ -473,21 +473,21 @@ export default function MemoryForge() {
           .mf-sidebar{ width:200px; flex-shrink:0; }
           .mf-sidebar-label{ display:block; }
           .mf-sidebar-logo-sub{ display:block; }
-          .mf-view-pad{ padding:40px 44px; }
+          .mf-view-pad{ padding:32px 40px; }
           .mf-stats-grid{ grid-template-columns:repeat(4,1fr); }
           .mf-preset-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
           .mf-two-col{ grid-template-columns:1fr 1fr; }
           .mf-discover-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); }
-          .mf-card-max{ max-width:940px; }
+          .mf-card-max{ max-width:100%; }
           .mf-hamburger{ display:none; }
           .mf-nav-overlay{ display:none; }
 
-          /* Wide screens (≥1440px) — give the sidebar more breathing room */
+          /* Wide screens (≥1440px) */
           @media(min-width:1440px){
-            .mf-sidebar{ width:230px; }
-            .mf-view-pad{ padding:48px 60px; }
+            .mf-sidebar{ width:220px; }
+            .mf-view-pad{ padding:40px 56px; }
             .mf-preset-grid{ grid-template-columns:repeat(4,minmax(0,1fr)); }
-            .mf-card-max{ max-width:1100px; }
+            .mf-stats-grid{ grid-template-columns:repeat(4,1fr); }
           }
 
           /* Tablet (640–1023px) — collapse sidebar to 52px icon rail */
@@ -495,12 +495,11 @@ export default function MemoryForge() {
             .mf-sidebar{ width:52px; }
             .mf-sidebar-label{ display:none; }
             .mf-sidebar-logo-sub{ display:none; }
-            .mf-view-pad{ padding:24px 28px; }
+            .mf-view-pad{ padding:20px 24px; }
             .mf-stats-grid{ grid-template-columns:repeat(2,1fr); }
             .mf-preset-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
             .mf-two-col{ grid-template-columns:1fr; }
             .mf-discover-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-            .mf-card-max{ max-width:100%; }
           }
 
           /* Mobile (< 640px) — hamburger + slide-in drawer */
@@ -518,12 +517,11 @@ export default function MemoryForge() {
               position:fixed; inset:0; z-index:300;
               background:${C.panel}; overflow-y:auto;
             }
-            .mf-view-pad{ padding:60px 16px 24px; }
+            .mf-view-pad{ padding:60px 14px 24px; }
             .mf-stats-grid{ grid-template-columns:repeat(2,1fr); }
             .mf-preset-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
             .mf-two-col{ grid-template-columns:1fr; }
             .mf-discover-grid{ grid-template-columns:1fr; }
-            .mf-card-max{ max-width:100%; }
           }
         `}</style>
 
@@ -703,7 +701,7 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
   };
 
   return (
-    <div className="mf-view-pad mf-card-max fade-in" style={{ maxWidth:1020 }}>
+    <div className="mf-view-pad mf-card-max fade-in">
       <Win title={`${greeting} SESSION`} style={{ marginBottom:28 }}>
         <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
           <div style={{ fontFamily:"'VT323',monospace", fontSize:32, color:C.text, lineHeight:1 }}>
@@ -714,7 +712,7 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
       </Win>
 
       {/* Stats */}
-      <div className="mf-stats-grid" style={{ display:"grid", gap:12, marginBottom:24 }}>
+      <div className="mf-stats-grid" style={{ display:"grid", gap:14, marginBottom:24 }}>
         {[
           { label:"DUE TODAY", val:due,         color:C.pink   },
           { label:"TOTAL",     val:cards.length, color:C.border },
