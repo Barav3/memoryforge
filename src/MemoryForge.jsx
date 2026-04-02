@@ -1316,26 +1316,7 @@ function DiscoverView({ onImport, userId, categories }) {
                     </select>
                   )}
                   <PixelBtn
-                    onClick={()=>!isOwn&&handleImport(pub)}
-                    disabled={isOwn||!!importing[pub.id]||!!importDone[pub.id]}
-                    color={isOwn?C.textHint:importDone[pub.id]?C.green:C.easy}
-                    style={{ width:"100%", display:"block", textAlign:"center" }}>
-                    {isOwn?"YOUR DECK":importing[pub.id]?"IMPORTING...":importDone[pub.id]?"✓ ADDED":"[ IMPORT ]"}
-                  </PixelBtn>
-                </div>
-                    <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub, marginBottom:10, lineHeight:1.5 }}>
-                      {pub.deck_description.slice(0,80)}
-                    </div>
-                  )}
-                  <div style={{ display:"flex", gap:6, marginBottom:10, flexWrap:"wrap" }}>
-                    <PixelTag color={C.textSub}>{pub.card_count} CARDS</PixelTag>
-                    <PixelTag color={C.cyan}>{pub.imports||0} IMPORTS</PixelTag>
-                  </div>
-                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.textHint, marginBottom:14 }}>
-                    BY {(pub.username||"ANON").toUpperCase().slice(0,18)}
-                  </div>
-                  <PixelBtn
-                    onClick={()=>!isOwn&&handleImport(pub)}
+                    onClick={()=>!isOwn&&handleImport(pub, importCat[pub.id]||null)}
                     disabled={isOwn||!!importing[pub.id]||!!importDone[pub.id]}
                     color={isOwn?C.textHint:importDone[pub.id]?C.green:C.easy}
                     style={{ width:"100%", display:"block", textAlign:"center" }}>
