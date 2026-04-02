@@ -106,7 +106,8 @@ function deckToDb(deck, userId) {
   return {
     id: deck.id, user_id: userId, name: deck.name,
     description: deck.description, color: deck.color,
-    emoji: deck.emoji, created_at: deck.createdAt,
+    emoji: deck.emoji, category_id: deck.categoryId || null,
+    created_at: deck.createdAt,
   };
 }
 
@@ -114,8 +115,17 @@ function dbToDeck(row) {
   return {
     id: row.id, name: row.name, description: row.description || "",
     color: row.color || "#1144DD", emoji: row.emoji || "📚",
+    categoryId: row.category_id || null,
     createdAt: row.created_at,
   };
+}
+
+function categoryToDb(cat, userId) {
+  return { id:cat.id, user_id:userId, name:cat.name, color:cat.color, emoji:cat.emoji, created_at:cat.createdAt };
+}
+
+function dbToCategory(row) {
+  return { id:row.id, name:row.name, color:row.color||"#888888", emoji:row.emoji||"📁", createdAt:row.created_at };
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -145,6 +155,28 @@ const DB = {
   async upsertDeck(deck) {
     const { data:{ user } } = await supabase.auth.getUser();
     const { error } = await supabase.from("decks").upsert(deckToDb(deck, user.id), { onConflict:"id" });
+    if (error) throw error;
+  },
+  async deleteDeck(id) {
+    const { error } = await supabase.from("decks").delete().eq("id", id);
+    if (error) throw error;
+  },
+
+  // Categories
+  async getCategories() {
+    const { data, error } = await supabase.from("categories").select("*").order("created_at", { ascending:true });
+    if (error) throw error;
+    return (data||[]).map(dbToCategory);
+  },
+  async upsertCategory(cat) {
+    const { data:{ user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from("categories").upsert(categoryToDb(cat, user.id), { onConflict:"id" });
+    if (error) throw error;
+  },
+  async deleteCategory(id) {
+    // Null-out any decks using this category first
+    await supabase.from("decks").update({ category_id:null }).eq("category_id", id);
+    const { error } = await supabase.from("categories").delete().eq("id", id);
     if (error) throw error;
   },
 
@@ -186,12 +218,13 @@ const DB = {
     const { data } = await q;
     return data || [];
   },
-  async importDeck(pub, userId) {
+  async importDeck(pub, userId, categoryId=null) {
     const newDeckId = `deck_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
     const newDeck = {
       id:newDeckId, user_id:userId,
       name:pub.deck_name, description:pub.deck_description||"",
       emoji:pub.deck_emoji||"📚", color:pub.deck_color||"#1144DD",
+      category_id:categoryId,
       created_at:new Date().toISOString(),
     };
     await supabase.from("decks").insert(newDeck);
@@ -250,23 +283,7 @@ const CardEngine = {
   },
 };
 
-// ─────────────────────────────────────────────────────────────
-// SEED DATA
-// ─────────────────────────────────────────────────────────────
-
-const SEED_DECKS = [
-  { id:"deck_1", name:"Biology",  description:"Cell biology & genetics", color:"#00FF88", emoji:"🧬", createdAt:new Date().toISOString() },
-  { id:"deck_2", name:"History",  description:"Key world events",        color:"#FFD600", emoji:"🏛",  createdAt:new Date().toISOString() },
-  { id:"deck_3", name:"Math",     description:"Calculus & algebra",      color:"#00CCFF", emoji:"∑",   createdAt:new Date().toISOString() },
-];
-const SEED_CARDS = [
-  CardEngine.createCard({ id:"c1", front:"What is mitosis?",          back:"Cell division producing two identical daughter cells.\n\nPhases: Prophase → Metaphase → Anaphase → Telophase", tags:["cell","division"], deckId:"deck_1", repetitions:3, interval:8 }),
-  CardEngine.createCard({ id:"c2", front:"DNA stands for?",           back:"Deoxyribonucleic Acid\n\nThe double-helix molecule encoding all genetic information.", tags:["genetics"], deckId:"deck_1" }),
-  CardEngine.createCard({ id:"c3", front:"Powerhouse of the cell?",   back:"The Mitochondria\n\nProduces ATP via cellular respiration.", tags:["cell","energy"], deckId:"deck_1", repetitions:6, interval:21 }),
-  CardEngine.createCard({ id:"c4", front:"French Revolution began?",  back:"1789 — Storming of the Bastille, July 14th.", tags:["france"], deckId:"deck_2", repetitions:2, interval:6 }),
-  CardEngine.createCard({ id:"c5", front:"Pythagorean Theorem",       back:"a² + b² = c²\n\nHypotenuse squared = sum of squares of the other two sides.", tags:["geometry"], deckId:"deck_3", repetitions:4, interval:14 }),
-  CardEngine.createCard({ id:"c6", front:"Derivative of sin(x)?",     back:"cos(x)\n\nAnd d/dx[cos(x)] = −sin(x)", tags:["calculus"], deckId:"deck_3" }),
-];
+// No seed data — users start with a clean slate.
 
 // ─────────────────────────────────────────────────────────────
 // MARKDOWN
@@ -354,9 +371,54 @@ function ToggleBtn({ value, onChange }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// ROOT APP
-// ─────────────────────────────────────────────────────────────
+/** PixelIcon — tiny 8×8 SVG pixel-art icons */
+function PixelIcon({ name, size=14, color }) {
+  const C = useC();
+  const col = color||C.text;
+  const px = size/8;
+  // Each icon is defined as a grid of [col,row] filled squares
+  const icons = {
+    folder:  [[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[0,2],[7,2],[0,3],[7,3],[0,4],[7,4],[0,5],[7,5],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6],[1,0],[2,0],[3,0]],
+    plus:    [[3,0],[4,0],[3,1],[4,1],[0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[7,3],[0,4],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[7,4],[3,5],[4,5],[3,6],[4,6],[3,7],[4,7]],
+    trash:   [[2,0],[3,0],[4,0],[5,0],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5],[1,6],[6,6],[1,7],[6,7]],
+    edit:    [[6,0],[5,1],[7,1],[4,2],[6,2],[3,3],[5,3],[2,4],[4,4],[1,5],[3,5],[0,6],[2,6],[0,7],[1,7],[2,7]],
+    star:    [[3,0],[4,0],[2,1],[3,1],[4,1],[5,1],[0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[7,2],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],[2,4],[3,4],[4,4],[5,4],[1,5],[6,5],[0,6],[7,6],[0,7],[7,7]],
+    play:    [[0,0],[0,1],[1,1],[0,2],[1,2],[2,2],[0,3],[1,3],[2,3],[3,3],[0,4],[1,4],[2,4],[3,4],[0,5],[1,5],[2,5],[0,6],[1,6],[0,7]],
+    save:    [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],[0,1],[1,1],[5,1],[6,1],[7,1],[0,2],[1,2],[5,2],[6,2],[7,2],[0,3],[7,3],[0,4],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[7,4],[0,5],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5],[7,5],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6],[0,7],[7,7]],
+    grid:    [[0,0],[1,0],[2,0],[4,0],[5,0],[6,0],[0,1],[2,1],[4,1],[6,1],[0,2],[1,2],[2,2],[4,2],[5,2],[6,2],[0,4],[1,4],[2,4],[4,4],[5,4],[6,4],[0,5],[2,5],[4,5],[6,5],[0,6],[1,6],[2,6],[4,6],[5,6],[6,6]],
+    upload:  [[3,0],[4,0],[2,1],[3,1],[4,1],[5,1],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],[3,3],[4,3],[3,4],[4,4],[3,5],[4,5],[0,6],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6],[0,7],[7,7]],
+    download:[[0,0],[7,0],[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],[3,2],[4,2],[3,3],[4,3],[3,4],[4,4],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5],[2,6],[3,6],[4,6],[5,6],[3,7],[4,7]],
+    home:    [[3,0],[4,0],[2,1],[5,1],[1,2],[6,2],[0,3],[7,3],[1,4],[2,4],[3,4],[4,4],[5,4],[6,4],[1,5],[2,5],[3,5],[4,5],[5,5],[6,5],[1,6],[2,6],[3,6],[4,6],[5,6],[6,6],[1,7],[2,7],[5,7],[6,7]],
+    cards:   [[0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[0,1],[5,1],[0,2],[5,2],[0,3],[5,3],[0,4],[5,4],[0,5],[1,5],[2,5],[3,5],[4,5],[5,5],[2,2],[3,2],[4,2],[6,2],[7,2],[6,3],[7,3],[6,4],[7,4],[6,5],[7,5],[2,6],[3,6],[4,6],[5,6],[6,6],[7,6]],
+  };
+  const pixels = icons[name] || [];
+  return (
+    <svg width={size} height={size} viewBox="0 0 8 8" style={{ display:"inline-block", imageRendering:"pixelated", flexShrink:0 }}>
+      {pixels.map(([x,y],i)=><rect key={i} x={x} y={y} width={1} height={1} fill={col}/>)}
+    </svg>
+  );
+}
+
+/**
+ * FaIcon — Font Awesome 6 solid icon, sized + colored.
+ * fa="house" renders <i class="fa-solid fa-house">
+ * Retro usage: keep size ≤16px so it reads as pixel-art scale.
+ */
+function FaIcon({ fa, size=14, color, style={} }) {
+  const C = useC();
+  return (
+    <i className={`fa-solid fa-${fa}`} style={{
+      fontSize: size,
+      color: color||C.text,
+      display: "inline-block",
+      width: size,
+      textAlign: "center",
+      flexShrink: 0,
+      lineHeight: 1,
+      ...style,
+    }} />
+  );
+}
 
 export default function MemoryForge() {
   const [session, setSession]           = useState(null);
@@ -371,6 +433,7 @@ export default function MemoryForge() {
   const [filterDeck, setFilterDeck]     = useState("all");
   const [themeConfig, setThemeConfig]   = useState({ preset:"digital", custom:DEFAULT_CUSTOM });
   const [navOpen, setNavOpen]           = useState(false);
+  const [categories, setCategories]     = useState([]);
 
   const C = useMemo(()=>buildC(themeConfig), [themeConfig]);
   const saveThemeRef = useRef(null);
@@ -388,13 +451,13 @@ export default function MemoryForge() {
     (async()=>{
       setDataLoading(true);
       try {
-        const [dbCards, dbDecks, profile] = await Promise.all([DB.getCards(), DB.getDecks(), DB.getProfile()]);
+        const [dbCards, dbDecks, dbCats, profile] = await Promise.all([
+          DB.getCards(), DB.getDecks(), DB.getCategories(), DB.getProfile()
+        ]);
         if (profile) setThemeConfig(profile);
-        if (dbDecks.length===0) {
-          await Promise.all(SEED_DECKS.map((d)=>DB.upsertDeck(d)));
-          await Promise.all(SEED_CARDS.map((c)=>DB.upsertCard(c)));
-          setDecks(SEED_DECKS); setCards(SEED_CARDS);
-        } else { setDecks(dbDecks); setCards(dbCards); }
+        setDecks(dbDecks);
+        setCards(dbCards);
+        setCategories(dbCats);
       } catch(e) { console.error(e); }
       setDataLoading(false);
     })();
@@ -421,6 +484,36 @@ export default function MemoryForge() {
     try { await DB.deleteCard(id); } catch(e){ console.error(e); }
   },[]);
 
+  // Deck CRUD
+  const createDeck = useCallback(async(deck)=>{
+    setDecks((prev)=>[...prev,deck]);
+    try { await DB.upsertDeck(deck); } catch(e){ console.error(e); }
+  },[]);
+  const updateDeck = useCallback(async(updated)=>{
+    setDecks((prev)=>prev.map((d)=>d.id===updated.id?updated:d));
+    try { await DB.upsertDeck(updated); } catch(e){ console.error(e); }
+  },[]);
+  const deleteDeck = useCallback(async(id)=>{
+    setDecks((prev)=>prev.filter((d)=>d.id!==id));
+    setCards((prev)=>prev.filter((c)=>c.deckId!==id));
+    try { await DB.deleteDeck(id); } catch(e){ console.error(e); }
+  },[]);
+
+  // Category CRUD
+  const createCategory = useCallback(async(cat)=>{
+    setCategories((prev)=>[...prev,cat]);
+    try { await DB.upsertCategory(cat); } catch(e){ console.error(e); }
+  },[]);
+  const updateCategory = useCallback(async(updated)=>{
+    setCategories((prev)=>prev.map((c)=>c.id===updated.id?updated:c));
+    try { await DB.upsertCategory(updated); } catch(e){ console.error(e); }
+  },[]);
+  const deleteCategory = useCallback(async(id)=>{
+    setCategories((prev)=>prev.filter((c)=>c.id!==id));
+    setDecks((prev)=>prev.map((d)=>d.categoryId===id?{...d,categoryId:null}:d));
+    try { await DB.deleteCategory(id); } catch(e){ console.error(e); }
+  },[]);
+
   // Publish a deck to community
   const publishDeck = useCallback(async(deck)=>{
     const deckCards = cards.filter((c)=>c.deckId===deck.id);
@@ -433,9 +526,9 @@ export default function MemoryForge() {
   },[cards, session]);
 
   // Import a community deck
-  const importDeck = useCallback(async(pub)=>{
+  const importDeck = useCallback(async(pub, categoryId=null)=>{
     try {
-      const { deck, cards:newCards } = await DB.importDeck(pub, session.user.id);
+      const { deck, cards:newCards } = await DB.importDeck(pub, session.user.id, categoryId);
       setDecks((prev)=>[...prev,deck]);
       setCards((prev)=>[...prev,...newCards]);
     } catch(e){ console.error(e); }
@@ -455,7 +548,11 @@ export default function MemoryForge() {
       <div style={{ display:"flex", minHeight:"100vh", background:C.bg, fontFamily:"monospace", transition:"background .3s, color .3s" }}>
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+          @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
           *{box-sizing:border-box;margin:0;padding:0}
+          /* FA icons — snap to pixel grid, inherit theme color */
+          .mf-icon{ display:inline-flex; align-items:center; justify-content:center; line-height:1; flex-shrink:0; }
+          .mf-icon i{ font-style:normal; }
           ::-webkit-scrollbar{width:8px}::-webkit-scrollbar-track{background:${C.bg}}::-webkit-scrollbar-thumb{background:${C.border};border:2px solid ${C.bg}}
           input,textarea,select{font-family:monospace;background:${C.raised};border:2px solid ${C.border};color:${C.text};padding:8px 10px;font-size:13px;outline:none;border-radius:0}
           input:focus,textarea:focus,select:focus{box-shadow:3px 3px 0 ${C.border}}
@@ -539,19 +636,23 @@ export default function MemoryForge() {
               <button onClick={()=>setNavOpen(false)} style={{ background:"none",border:"none",color:"#FFF",fontSize:22,cursor:"pointer" }}>×</button>
             </div>
             {[
-              { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
-              { id:"study",     label:"STUDY.EXE", icon:"▶" },
-              { id:"discover",  label:"DISCOVER",  icon:"◎" },
-              { id:"creator",   label:"CREATOR",   icon:"✦" },
-              { id:"library",   label:"LIBRARY",   icon:"⊞" },
-              { id:"theme",     label:"⬡ THEME",   icon:"◈" },
+              { id:"dashboard", label:"DASHBOARD", fa:"house"          },
+              { id:"study",     label:"STUDY.EXE", fa:"graduation-cap" },
+              { id:"discover",  label:"DISCOVER",  fa:"compass"        },
+              { id:"creator",   label:"CREATOR",   fa:"pen-to-square"  },
+              { id:"library",   label:"LIBRARY",   fa:"book-open"      },
+              { id:"theme",     label:"THEME",     fa:"palette"        },
             ].map((item)=>(
               <button key={item.id} onClick={()=>{ navTo(item.id); setNavOpen(false); }} style={{
-                display:"block", width:"100%", textAlign:"left", padding:"16px 20px",
+                display:"flex", alignItems:"center", gap:12,
+                width:"100%", textAlign:"left", padding:"16px 20px",
                 fontFamily:"'Press Start 2P',monospace", fontSize:8, letterSpacing:0.5,
                 color:view===item.id?C.panel:C.text, background:view===item.id?C.border:"transparent",
                 border:"none", borderBottom:`1px solid ${C.border}30`, cursor:"pointer",
-              }}>{item.icon} {item.label}</button>
+              }}>
+                <FaIcon fa={item.fa} size={14} color={view===item.id?C.panel:C.text} />
+                {item.label}
+              </button>
             ))}
             <div style={{ padding:"16px 20px", marginTop:"auto", borderTop:`2px solid ${C.border}` }}>
               <div style={{ fontFamily:"monospace", fontSize:12, color:C.text, marginBottom:12 }}>
@@ -564,28 +665,28 @@ export default function MemoryForge() {
 
         {/* ── SIDEBAR (tablet: icon rail / desktop: full) ─ */}
         <aside className="mf-sidebar" style={{ background:C.panel, borderRight:`2px solid ${C.border}`, display:"flex", flexDirection:"column", transition:"background .3s,border-color .3s,width .2s" }}>
-          <div style={{ background:C.border, padding:"16px 14px" }}>
-            <div className="glitch" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:11, color:"#FFFFFF", lineHeight:1.6, letterSpacing:0.5 }}>M<span className="mf-sidebar-label">EMORY</span><br/>F<span className="mf-sidebar-label">ORGE</span></div>
-            <div className="mf-sidebar-logo-sub" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:"#AABBFF", marginTop:6 }}>SM-2 ENGINE v3.0</div>
+          <div style={{ background:C.border, padding:"14px 12px" }}>
+            <div className="glitch" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:10, color:"#FFFFFF", lineHeight:1.8, letterSpacing:0.5 }}>MEMORY<br/>FORGE</div>
+            <div className="mf-sidebar-logo-sub" style={{ fontFamily:"'Press Start 2P',monospace", fontSize:5, color:"#AABBFF", marginTop:5, letterSpacing:0.5 }}>SM-2 v3.0</div>
           </div>
-          <nav style={{ flex:1, padding:"12px 0" }}>
+          <nav style={{ flex:1, padding:"8px 0" }}>
             {[
-              { id:"dashboard", label:"DASHBOARD", icon:"⬡" },
-              { id:"study",     label:"STUDY.EXE", icon:"▶" },
-              { id:"discover",  label:"DISCOVER",  icon:"◎" },
-              { id:"creator",   label:"CREATOR",   icon:"✦" },
-              { id:"library",   label:"LIBRARY",   icon:"⊞" },
-              { id:"theme",     label:"⬡ THEME",   icon:"◈" },
+              { id:"dashboard", label:"DASHBOARD", fa:"house"         },
+              { id:"study",     label:"STUDY.EXE", fa:"graduation-cap"},
+              { id:"discover",  label:"DISCOVER",  fa:"compass"       },
+              { id:"creator",   label:"CREATOR",   fa:"pen-to-square" },
+              { id:"library",   label:"LIBRARY",   fa:"book-open"     },
+              { id:"theme",     label:"THEME",     fa:"palette"       },
             ].map((item)=>(
               <button key={item.id} onClick={()=>navTo(item.id)} title={item.label} style={{
-                display:"flex", alignItems:"center", gap:8,
-                width:"100%", textAlign:"left", padding:"11px 14px",
+                display:"flex", alignItems:"center", gap:10,
+                width:"100%", textAlign:"left", padding:"10px 14px",
                 fontFamily:"'Press Start 2P',monospace", fontSize:7, letterSpacing:0.5, lineHeight:1,
-                color:view===item.id?C.panel:C.text, background:view===item.id?C.border:"transparent",
+                color:view===item.id?"#FFFFFF":C.text, background:view===item.id?C.border:"transparent",
                 border:"none", borderLeft:view===item.id?`4px solid ${C.cyan}`:"4px solid transparent",
                 cursor:"pointer", transition:"all .12s", whiteSpace:"nowrap", overflow:"hidden",
               }}>
-                <span style={{ flexShrink:0, fontSize:12 }}>{item.icon}</span>
+                <FaIcon fa={item.fa} size={13} color={view===item.id?"#FFFFFF":C.text} />
                 <span className="mf-sidebar-label">{item.label}</span>
               </button>
             ))}
@@ -604,9 +705,9 @@ export default function MemoryForge() {
 
         {/* ── MAIN ────────────────────────────────────────── */}
         <main style={{ flex:1, overflow:"auto", minWidth:0 }}>
-          {view==="dashboard" && <DashboardView cards={cards} decks={decks} studyConfig={studyConfig} setStudyConfig={setStudyConfig} navTo={navTo} onPublish={publishDeck} />}
+          {view==="dashboard" && <DashboardView cards={cards} decks={decks} categories={categories} studyConfig={studyConfig} setStudyConfig={setStudyConfig} navTo={navTo} onPublish={publishDeck} onCreateDeck={createDeck} onUpdateDeck={updateDeck} onDeleteDeck={deleteDeck} onCreateCategory={createCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} />}
           {view==="study"     && <StudyView cards={cards} decks={decks} studyConfig={studyConfig} onCardUpdate={updateCard} aiOpen={aiOpen} setAiOpen={setAiOpen} />}
-          {view==="discover"  && <DiscoverView onImport={importDeck} userId={user.id} />}
+          {view==="discover"  && <DiscoverView onImport={importDeck} userId={user.id} categories={categories} />}
           {view==="creator"   && <CreatorView cards={cards} decks={decks} onCardCreate={createCard} onCardUpdate={updateCard} editingCard={editingCard} setEditingCard={setEditingCard} />}
           {view==="library"   && <LibraryView cards={cards} decks={decks} filterDeck={filterDeck} setFilterDeck={setFilterDeck} onDelete={deleteCard} onEdit={(c)=>{ setEditingCard(c); navTo("creator"); }} />}
           {view==="theme"     && <ThemeView themeConfig={themeConfig} onUpdate={updateTheme} />}
@@ -682,70 +783,148 @@ function AuthView() {
 // DASHBOARD VIEW
 // ─────────────────────────────────────────────────────────────
 
-function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPublish }) {
+function DashboardView({ cards, decks, categories, studyConfig, setStudyConfig, navTo, onPublish, onCreateDeck, onUpdateDeck, onDeleteDeck, onCreateCategory, onUpdateCategory, onDeleteCategory }) {
   const C = useC();
   const due      = CardEngine.getDueCards(cards).length;
   const mastered = cards.filter((c)=>c.interval>30).length;
   const learned  = cards.filter((c)=>c.repetitions>0).length;
   const hour     = new Date().getHours();
   const greeting = ["MORNING","AFTERNOON","EVENING"][[0,12,17].findLastIndex((h)=>hour>=h)];
-  const [publishing, setPublishing] = useState({});
-  const [pubDone, setPubDone] = useState({});
+
+  const [publishing, setPublishing]   = useState({});
+  const [pubDone, setPubDone]         = useState({});
+  const [newCatName, setNewCatName]   = useState("");
+  const [newCatColor, setNewCatColor] = useState("#00CCFF");
+  const [newCatEmoji, setNewCatEmoji] = useState("📁");
+  const [showCatForm, setShowCatForm] = useState(false);
+  const [newDeckName, setNewDeckName] = useState("");
+  const [newDeckCat,  setNewDeckCat]  = useState("");
+  const [newDeckColor,setNewDeckColor]= useState("#BB88FF");
+  const [showDeckForm,setShowDeckForm]= useState(false);
+  const [movingDeck,  setMovingDeck]  = useState(null); // deckId being reassigned
+
+  const CAT_COLORS = ["#FF1155","#FF7700","#FFD600","#00FF88","#00CCFF","#BB88FF","#FF88AA","#AACCFF"];
 
   const handlePublish = async(deck)=>{
-    setPublishing((p)=>({ ...p, [deck.id]:true }));
+    setPublishing((p)=>({ ...p,[deck.id]:true }));
     await onPublish(deck);
-    setPublishing((p)=>({ ...p, [deck.id]:false }));
-    setPubDone((p)=>({ ...p, [deck.id]:true }));
-    setTimeout(()=>setPubDone((p)=>({ ...p, [deck.id]:false })),2200);
+    setPublishing((p)=>({ ...p,[deck.id]:false }));
+    setPubDone((p)=>({ ...p,[deck.id]:true }));
+    setTimeout(()=>setPubDone((p)=>({ ...p,[deck.id]:false })),2200);
+  };
+
+  const handleCreateCategory = ()=>{
+    if (!newCatName.trim()) return;
+    const cat = { id:`cat_${Date.now()}`, name:newCatName.trim(), color:newCatColor, emoji:newCatEmoji, createdAt:new Date().toISOString() };
+    onCreateCategory(cat);
+    setNewCatName(""); setShowCatForm(false);
+  };
+
+  const handleCreateDeck = ()=>{
+    if (!newDeckName.trim()) return;
+    const deck = { id:`deck_${Date.now()}`, name:newDeckName.trim(), description:"", color:newDeckColor, emoji:"📚", categoryId:newDeckCat||null, createdAt:new Date().toISOString() };
+    onCreateDeck(deck);
+    setNewDeckName(""); setNewDeckCat(""); setShowDeckForm(false);
+  };
+
+  // Group decks by category
+  const decksByCategory = categories.map((cat)=>({
+    cat, decks:decks.filter((d)=>d.categoryId===cat.id)
+  }));
+  const uncategorized = decks.filter((d)=>!d.categoryId);
+
+  const DeckRow = ({ deck })=>{
+    const dc = cards.filter((c)=>c.deckId===deck.id);
+    const dueCount = CardEngine.getDueCards(dc).length;
+    return (
+      <div style={{ border:`2px solid ${C.border}`, borderLeft:`5px solid ${deck.color}`, display:"flex", alignItems:"center", gap:8, marginBottom:8, background:C.panel, transition:"all .12s" }}
+        onMouseEnter={(e)=>{ e.currentTarget.style.boxShadow=`3px 3px 0 ${C.border}`; e.currentTarget.style.transform="translate(-1px,-1px)"; }}
+        onMouseLeave={(e)=>{ e.currentTarget.style.boxShadow="none"; e.currentTarget.style.transform="none"; }}>
+        <div style={{ cursor:"pointer", flex:1, padding:"10px 12px" }} onClick={()=>navTo("study")}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+            <span style={{ fontSize:16 }}>{deck.emoji}</span>
+            <span style={{ fontFamily:"'Press Start 2P',monospace", fontSize:7, color:C.text }}>{deck.name.toUpperCase()}</span>
+          </div>
+          <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub }}>
+            {dc.length} cards{dueCount>0?<span style={{ color:C.pink }}> · {dueCount} due</span>:""}
+          </div>
+        </div>
+        {/* Reassign category */}
+        <select value={deck.categoryId||""} onChange={(e)=>onUpdateDeck({ ...deck, categoryId:e.target.value||null })}
+          title="Move to category"
+          style={{ fontFamily:"monospace", fontSize:10, padding:"4px 6px", maxWidth:90, cursor:"pointer", border:`1px solid ${C.border}50`, background:C.raised, color:C.textSub }}>
+          <option value="">No category</option>
+          {categories.map((cat)=><option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>)}
+        </select>
+        <div style={{ display:"flex", gap:6, padding:"0 10px" }}>
+          <button onClick={()=>handlePublish(deck)} title="Publish to community"
+            style={{ background:"none", border:"none", cursor:"pointer", padding:"4px" }}>
+            <FaIcon fa="cloud-arrow-up" size={13} color={pubDone[deck.id]?C.green:C.purple} />
+          </button>
+          <button onClick={()=>onDeleteDeck(deck.id)} title="Delete deck"
+            style={{ background:"none", border:"none", cursor:"pointer", padding:"4px" }}>
+            <FaIcon fa="trash" size={13} color={C.pink} />
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="mf-view-pad mf-card-max fade-in">
-      <Win title={`${greeting} SESSION`} style={{ marginBottom:28 }}>
-        <div style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
-          <div style={{ fontFamily:"'VT323',monospace", fontSize:32, color:C.text, lineHeight:1 }}>
-            {due>0?<><span style={{ color:C.border }}>{due}</span> CARD{due!==1?"S":""} READY</>:"ALL CAUGHT UP!"}
+    <div className="mf-view-pad fade-in">
+      {/* Header bar */}
+      <Win title={`${greeting} SESSION`} style={{ marginBottom:20 }}>
+        <div style={{ padding:"12px 18px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:10 }}>
+          <div style={{ fontFamily:"'VT323',monospace", fontSize:30, color:C.text, lineHeight:1 }}>
+            {due>0?<><span style={{ color:C.border }}>{due}</span> CARD{due!==1?"S":""} READY FOR REVIEW</>:"ALL CAUGHT UP — WELL DONE"}
           </div>
-          <PixelBtn onClick={()=>navTo("study")} color={C.green}>START.EXE →</PixelBtn>
+          <div style={{ display:"flex", gap:10 }}>
+            <PixelBtn onClick={()=>navTo("study")} color={C.green}>
+              <FaIcon fa="play" size={10} color={C.panel} style={{ marginRight:6 }} /> STUDY
+            </PixelBtn>
+            <PixelBtn onClick={()=>navTo("creator")} color={C.cyan}>
+              <FaIcon fa="plus" size={10} color={C.panel} style={{ marginRight:6 }} /> NEW CARD
+            </PixelBtn>
+          </div>
         </div>
       </Win>
 
       {/* Stats */}
-      <div className="mf-stats-grid" style={{ display:"grid", gap:14, marginBottom:24 }}>
+      <div className="mf-stats-grid" style={{ display:"grid", gap:12, marginBottom:20 }}>
         {[
-          { label:"DUE TODAY", val:due,         color:C.pink   },
-          { label:"TOTAL",     val:cards.length, color:C.border },
-          { label:"LEARNED",   val:learned,      color:C.cyan   },
-          { label:"MASTERED",  val:mastered,     color:C.green  },
+          { label:"DUE TODAY", val:due,         color:C.pink,   fa:"bell"      },
+          { label:"TOTAL",     val:cards.length, color:C.border, fa:"layer-group"},
+          { label:"LEARNED",   val:learned,      color:C.cyan,   fa:"brain"     },
+          { label:"MASTERED",  val:mastered,     color:C.green,  fa:"trophy"    },
         ].map((s,i)=>(
-          <Win key={i} title={s.label} controls={false} style={{ animation:`fadeUp .3s ease ${i*0.06}s both` }}>
-            <div style={{ padding:"18px 20px" }}>
-              <div style={{ fontFamily:"'VT323',monospace", fontSize:56, color:s.color, lineHeight:1 }}>{s.val}</div>
+          <Win key={i} title={s.label} controls={false} style={{ animation:`fadeUp .3s ease ${i*0.06}s both` }}
+            titleRight={<FaIcon fa={s.fa} size={10} color="#FFFFFF" />}>
+            <div style={{ padding:"14px 16px" }}>
+              <div style={{ fontFamily:"'VT323',monospace", fontSize:52, color:s.color, lineHeight:1 }}>{s.val}</div>
             </div>
           </Win>
         ))}
       </div>
 
       <div className="mf-two-col" style={{ display:"grid", gap:20 }}>
-        {/* Session config */}
-        <Win title="SESSION CONFIG">
-          <div style={{ padding:"20px" }}>
+        {/* Left — session config */}
+        <Win title="SESSION CONFIG" titleRight={<FaIcon fa="sliders" size={10} color="#FFFFFF" />}>
+          <div style={{ padding:"16px" }}>
             {[
               { key:"shuffle",    label:"SHUFFLE CARDS", desc:"Randomize order"    },
               { key:"wrongsOnly", label:"WRONGS ONLY",   desc:"Review failed cards" },
               { key:"reversed",   label:"REVERSE MODE",  desc:"Answer → Question"  },
             ].map((opt)=>(
-              <div key={opt.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+              <div key={opt.key} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
                 <div>
-                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:7, color:C.text, marginBottom:4 }}>{opt.label}</div>
+                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:7, color:C.text, marginBottom:3 }}>{opt.label}</div>
                   <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub }}>{opt.desc}</div>
                 </div>
                 <ToggleBtn value={studyConfig[opt.key]} onChange={(v)=>setStudyConfig((c)=>({ ...c,[opt.key]:v }))} />
               </div>
             ))}
-            <div style={{ borderTop:`2px dashed ${C.border}30`, paddingTop:16 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:10 }}>
+            <div style={{ borderTop:`2px dashed ${C.border}30`, paddingTop:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                 <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:7, color:C.text }}>SESSION LIMIT</div>
                 <div style={{ fontFamily:"'VT323',monospace", fontSize:22, color:C.border, lineHeight:1 }}>{studyConfig.limit}</div>
               </div>
@@ -756,30 +935,105 @@ function DashboardView({ cards, decks, studyConfig, setStudyConfig, navTo, onPub
           </div>
         </Win>
 
-        {/* Decks with publish */}
-        <Win title="DECKS">
-          <div style={{ padding:"16px 20px", display:"flex", flexDirection:"column", gap:10 }}>
-            {decks.map((deck)=>{
-              const dc = cards.filter((c)=>c.deckId===deck.id);
-              const dueCount = CardEngine.getDueCards(dc).length;
-              return (
-                <div key={deck.id} style={{ border:`2px solid ${C.border}`, borderLeft:`5px solid ${deck.color}`, padding:"10px 12px", display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
-                  <div style={{ cursor:"pointer", flex:1 }} onClick={()=>navTo("study")}>
-                    <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:8, color:C.text, marginBottom:3 }}>{deck.name.toUpperCase()}</div>
-                    <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub }}>{dc.length} cards{dueCount>0?` · ${dueCount} due`:""}</div>
+        {/* Right — categories + decks */}
+        <div>
+          {/* Quick-add deck */}
+          <Win title="NEW DECK" controls={false} style={{ marginBottom:14 }}
+            titleRight={<PixelIcon name="plus" size={10} color="#FFFFFF" />}>
+            {showDeckForm ? (
+              <div style={{ padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                <input value={newDeckName} onChange={(e)=>setNewDeckName(e.target.value)}
+                  placeholder="DECK NAME..." onKeyDown={(e)=>e.key==="Enter"&&handleCreateDeck()} style={{ width:"100%" }} />
+                <div style={{ display:"flex", gap:8 }}>
+                  <select value={newDeckCat} onChange={(e)=>setNewDeckCat(e.target.value)} style={{ flex:1, cursor:"pointer" }}>
+                    <option value="">No category</option>
+                    {categories.map((cat)=><option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>)}
+                  </select>
+                  <div style={{ display:"flex", gap:4 }}>
+                    {CAT_COLORS.slice(0,4).map((col)=>(
+                      <div key={col} onClick={()=>setNewDeckColor(col)} style={{ width:20, height:20, background:col, border:newDeckColor===col?`2px solid ${C.text}`:`2px solid ${C.border}30`, cursor:"pointer" }} />
+                    ))}
                   </div>
-                  <PixelBtn onClick={()=>handlePublish(deck)} disabled={!!publishing[deck.id]}
-                    color={pubDone[deck.id]?C.green:C.purple} style={{ padding:"6px 10px", fontSize:7 }}>
-                    {pubDone[deck.id]?"✓ LIVE":publishing[deck.id]?"...":"PUBLISH"}
-                  </PixelBtn>
                 </div>
-              );
-            })}
-            <PixelBtn onClick={()=>navTo("discover")} color={C.cyan} style={{ marginTop:6, textAlign:"center", display:"block" }}>
-              BROWSE COMMUNITY →
-            </PixelBtn>
-          </div>
-        </Win>
+                <div style={{ display:"flex", gap:8 }}>
+                  <PixelBtn onClick={handleCreateDeck} color={C.green} style={{ flex:1, textAlign:"center", display:"block" }}>
+                    <PixelIcon name="save" size={10} color={C.panel} /> CREATE
+                  </PixelBtn>
+                  <PixelBtn onClick={()=>setShowDeckForm(false)} color={C.textSub}>CANCEL</PixelBtn>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding:"10px 14px" }}>
+                <PixelBtn onClick={()=>setShowDeckForm(true)} color={C.border} style={{ width:"100%", textAlign:"center", display:"block" }}>
+                  <PixelIcon name="plus" size={10} color="#FFFFFF" /> ADD DECK
+                </PixelBtn>
+              </div>
+            )}
+          </Win>
+
+          {/* Category sections */}
+          {decksByCategory.map(({ cat, decks:catDecks })=>(
+            <Win key={cat.id} title={`${cat.emoji} ${cat.name.toUpperCase()}`} controls={false}
+              titleBg={cat.color+"CC"}
+              style={{ marginBottom:12 }}
+              titleRight={
+                <button onClick={()=>onDeleteCategory(cat.id)} title="Delete category"
+                  style={{ background:"none", border:"none", cursor:"pointer" }}>
+                  <PixelIcon name="trash" size={10} color="#FFFFFF" />
+                </button>
+              }>
+              <div style={{ padding:"10px 12px" }}>
+                {catDecks.length===0 ? (
+                  <div style={{ fontFamily:"monospace", fontSize:11, color:C.textHint, padding:"6px 0" }}>No decks in this category yet. Use the dropdown on any deck to assign it here.</div>
+                ) : (
+                  catDecks.map((deck)=><DeckRow key={deck.id} deck={deck} />)
+                )}
+              </div>
+            </Win>
+          ))}
+
+          {/* Uncategorized */}
+          {uncategorized.length>0 && (
+            <Win title="UNCATEGORIZED" controls={false} style={{ marginBottom:12 }}>
+              <div style={{ padding:"10px 12px" }}>
+                {uncategorized.map((deck)=><DeckRow key={deck.id} deck={deck} />)}
+              </div>
+            </Win>
+          )}
+
+          {/* Create category */}
+          <Win title="NEW CATEGORY" controls={false}
+            titleRight={<PixelIcon name="folder" size={10} color="#FFFFFF" />}>
+            {showCatForm ? (
+              <div style={{ padding:"12px 14px", display:"flex", flexDirection:"column", gap:8 }}>
+                <div style={{ display:"flex", gap:8 }}>
+                  <input value={newCatEmoji} onChange={(e)=>setNewCatEmoji(e.target.value)}
+                    style={{ width:44, textAlign:"center", fontSize:18, padding:"4px" }} maxLength={2} />
+                  <input value={newCatName} onChange={(e)=>setNewCatName(e.target.value)}
+                    placeholder="CATEGORY NAME..." onKeyDown={(e)=>e.key==="Enter"&&handleCreateCategory()}
+                    style={{ flex:1 }} />
+                </div>
+                <div style={{ display:"flex", gap:5 }}>
+                  {CAT_COLORS.map((col)=>(
+                    <div key={col} onClick={()=>setNewCatColor(col)} style={{ width:22, height:22, background:col, border:newCatColor===col?`2px solid ${C.text}`:`2px solid ${C.border}20`, cursor:"pointer" }} />
+                  ))}
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <PixelBtn onClick={handleCreateCategory} color={C.green} style={{ flex:1, textAlign:"center", display:"block" }}>
+                    <PixelIcon name="folder" size={10} color={C.panel} /> CREATE
+                  </PixelBtn>
+                  <PixelBtn onClick={()=>setShowCatForm(false)} color={C.textSub}>CANCEL</PixelBtn>
+                </div>
+              </div>
+            ) : (
+              <div style={{ padding:"10px 14px" }}>
+                <PixelBtn onClick={()=>setShowCatForm(true)} color={C.cyan} style={{ width:"100%", textAlign:"center", display:"block" }}>
+                  <PixelIcon name="folder" size={10} color="#FFFFFF" /> ADD CATEGORY
+                </PixelBtn>
+              </div>
+            )}
+          </Win>
+        </div>
       </div>
     </div>
   );
@@ -985,13 +1239,14 @@ function StudyView({ cards, decks, studyConfig, onCardUpdate, aiOpen, setAiOpen 
 // DISCOVER VIEW  — browse and import community decks
 // ─────────────────────────────────────────────────────────────
 
-function DiscoverView({ onImport, userId }) {
+function DiscoverView({ onImport, userId, categories }) {
   const C = useC();
   const [pubDecks, setPubDecks] = useState([]);
   const [search, setSearch]     = useState("");
   const [loading, setLoading]   = useState(true);
   const [importing, setImporting] = useState({});
   const [importDone, setImportDone] = useState({});
+  const [importCat, setImportCat]   = useState({}); // pubId → categoryId
 
   useEffect(()=>{
     let alive = true;
@@ -1005,7 +1260,7 @@ function DiscoverView({ onImport, userId }) {
 
   const handleImport = async(pub)=>{
     setImporting((p)=>({ ...p,[pub.id]:true }));
-    await onImport(pub);
+    await onImport(pub, importCat[pub.id]||null);
     setImporting((p)=>({ ...p,[pub.id]:false }));
     setImportDone((p)=>({ ...p,[pub.id]:true }));
     setTimeout(()=>setImportDone((p)=>({ ...p,[pub.id]:false })),2500);
@@ -1042,6 +1297,32 @@ function DiscoverView({ onImport, userId }) {
                 <div style={{ padding:"14px" }}>
                   <div style={{ fontSize:24, marginBottom:6 }}>{pub.deck_emoji||"📚"}</div>
                   {pub.deck_description&&(
+                    <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub, marginBottom:8, lineHeight:1.5 }}>
+                      {pub.deck_description.slice(0,80)}
+                    </div>
+                  )}
+                  <div style={{ display:"flex", gap:5, marginBottom:8, flexWrap:"wrap" }}>
+                    <PixelTag color={C.textSub}>{pub.card_count} CARDS</PixelTag>
+                    <PixelTag color={C.cyan}>{pub.imports||0} IMPORTS</PixelTag>
+                  </div>
+                  <div style={{ fontFamily:"'Press Start 2P',monospace", fontSize:6, color:C.textHint, marginBottom:10 }}>
+                    BY {(pub.username||"ANON").toUpperCase().slice(0,18)}
+                  </div>
+                  {!isOwn && categories.length>0 && (
+                    <select value={importCat[pub.id]||""} onChange={(e)=>setImportCat((p)=>({ ...p,[pub.id]:e.target.value }))}
+                      style={{ width:"100%", marginBottom:8, fontSize:11, cursor:"pointer" }}>
+                      <option value="">No category</option>
+                      {categories.map((cat)=><option key={cat.id} value={cat.id}>{cat.emoji} {cat.name}</option>)}
+                    </select>
+                  )}
+                  <PixelBtn
+                    onClick={()=>!isOwn&&handleImport(pub)}
+                    disabled={isOwn||!!importing[pub.id]||!!importDone[pub.id]}
+                    color={isOwn?C.textHint:importDone[pub.id]?C.green:C.easy}
+                    style={{ width:"100%", display:"block", textAlign:"center" }}>
+                    {isOwn?"YOUR DECK":importing[pub.id]?"IMPORTING...":importDone[pub.id]?"✓ ADDED":"[ IMPORT ]"}
+                  </PixelBtn>
+                </div>
                     <div style={{ fontFamily:"monospace", fontSize:11, color:C.textSub, marginBottom:10, lineHeight:1.5 }}>
                       {pub.deck_description.slice(0,80)}
                     </div>
@@ -1339,8 +1620,12 @@ function LibraryView({ cards, decks, filterDeck, setFilterDeck, onDelete, onEdit
               <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 14px", flexShrink:0 }}>
                 {deck && <PixelTag color={deck.color||C.border}>{deck.name.toUpperCase()}</PixelTag>}
                 <PixelTag color={mastery.color}>{mastery.label}</PixelTag>
-                <PixelBtn onClick={()=>onEdit(card)} color={C.cyan} style={{ padding:"6px 10px" }}>EDIT</PixelBtn>
-                <PixelBtn onClick={()=>onDelete(card.id)} color={C.pink} style={{ padding:"6px 10px" }}>DEL</PixelBtn>
+                <button onClick={()=>onEdit(card)} title="Edit card" style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px" }}>
+                  <FaIcon fa="pen" size={13} color={C.cyan} />
+                </button>
+                <button onClick={()=>onDelete(card.id)} title="Delete card" style={{ background:"none", border:"none", cursor:"pointer", padding:"6px 8px" }}>
+                  <FaIcon fa="trash" size={13} color={C.pink} />
+                </button>
               </div>
             </div>
           );
