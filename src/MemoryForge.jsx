@@ -33,11 +33,11 @@ const supabase = createClient(
 // VIBES — each vibe defines chrome style + fonts
 // ─────────────────────────────────────────────────────────────
 const VIBES = {
-  retro:     { name:"RETRO",     icon:"⊞", desc:"Windows 95 pixel art",     chrome:"pixel",     fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:26, uiSize:8,  radius:0 },
-  modern:    { name:"MODERN",    icon:"◉", desc:"Clean minimal contemporary",chrome:"soft",      fontUI:"'DM Sans',sans-serif",       fontContent:"'DM Mono',monospace",   contentSize:18, uiSize:13, radius:14 },
-  arcade:    { name:"ARCADE",    icon:"▶", desc:"Pixel game UI, playful",    chrome:"arcade",    fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:24, uiSize:7,  radius:0 },
-  fantasy:   { name:"FANTASY",   icon:"⚔", desc:"Parchment scrolls, RPG",   chrome:"parchment", fontUI:"'Cinzel',serif",             fontContent:"'Crimson Text',serif", contentSize:22, uiSize:13, radius:4 },
-  vaporwave: { name:"VAPORWAVE", icon:"◈", desc:"Neon grid aesthetic",       chrome:"neon",      fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:24, uiSize:7,  radius:4 },
+  retro:     { name:"RETRO",     icon:"⊞", desc:"Windows 95 pixel art",     chrome:"pixel",     fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:30, uiSize:10, radius:0 },
+  modern:    { name:"MODERN",    icon:"◉", desc:"Clean minimal contemporary",chrome:"soft",      fontUI:"'DM Sans',sans-serif",       fontContent:"'DM Mono',monospace",   contentSize:20, uiSize:15, radius:14 },
+  arcade:    { name:"ARCADE",    icon:"▶", desc:"Pixel game UI, playful",    chrome:"arcade",    fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:28, uiSize:9,  radius:0 },
+  fantasy:   { name:"FANTASY",   icon:"⚔", desc:"Parchment scrolls, RPG",   chrome:"parchment", fontUI:"'Cinzel',serif",             fontContent:"'Crimson Text',serif", contentSize:24, uiSize:15, radius:4 },
+  vaporwave: { name:"VAPORWAVE", icon:"◈", desc:"Neon grid aesthetic",       chrome:"neon",      fontUI:"'Press Start 2P',monospace", fontContent:"'VT323',monospace",    contentSize:28, uiSize:9,  radius:4 },
 };
 
 // PALETTES — 4 per vibe, each a full color map
@@ -633,7 +633,7 @@ function Tag({ children, color }) {
   const col = color || C.border;
   const chrome = C.chrome || "pixel";
   return (
-    <span style={{ fontFamily:C.fontUI, fontSize:chrome==="soft"?11:7, color:col, border:`1.5px solid ${col}`, borderRadius:chrome==="soft"?999:0, padding:chrome==="soft"?"3px 10px":"3px 7px", letterSpacing:0.5, lineHeight:1, whiteSpace:"nowrap", background:col+"11" }}>
+    <span style={{ fontFamily:C.fontUI, fontSize:chrome==="soft"?13:9, color:col, border:`1.5px solid ${col}`, borderRadius:chrome==="soft"?999:0, padding:chrome==="soft"?"4px 12px":"4px 8px", letterSpacing:0.5, lineHeight:1, whiteSpace:"nowrap", background:col+"11" }}>
       {children}
     </span>
   );
@@ -781,59 +781,159 @@ function OnboardingModal({ userId, onDone, themeConfig, onTheme }) {
   const C = useC();
   const [step, setStep] = useState(0);
   const [chosenCompanion, setChosenCompanion] = useState("croak");
-  const [chosenVibe, setChosenVibe] = useState("retro");
+  const [chosenVibe, setChosenVibe] = useState(themeConfig.vibe || "retro");
+  const [chosenPalette, setChosenPalette] = useState(themeConfig.palette || "digital");
 
-  const steps = [
-    { title:"Welcome to MemoryForge!", body:"Your spaced-repetition study companion. Let's set you up in three quick steps." },
-    { title:"Choose your companion", body:"Your companion lives in study mode, explains cards in their own voice, and cheers you on." },
-    { title:"Pick your vibe", body:"Each vibe changes the whole look and feel. You can always change it later." },
-  ];
+  // Real-time preview — apply immediately as user clicks
+  const handleVibeClick = (key) => {
+    setChosenVibe(key);
+    const palKey = Object.keys(PALETTES[key])[0];
+    setChosenPalette(palKey);
+    onTheme({ vibe:key, palette:palKey }); // live preview
+  };
+  const handlePaletteClick = (key) => {
+    setChosenPalette(key);
+    onTheme({ vibe:chosenVibe, palette:key }); // live preview
+  };
 
   const handleDone = () => {
-    onTheme({ ...themeConfig, vibe:chosenVibe, palette:Object.keys(PALETTES[chosenVibe])[0] });
+    onTheme({ vibe:chosenVibe, palette:chosenPalette });
     localStorage.setItem(`mf_onboarded_${userId}`, "1");
     localStorage.setItem(`mf_companion_${userId}`, chosenCompanion);
     onDone(chosenCompanion);
   };
 
+  const stepTitles = ["Welcome to MemoryForge", "Pick your companion", "Choose your vibe"];
+  const stepSubs   = [
+    "Spaced repetition that actually sticks. Three quick choices to set up your experience.",
+    "Your companion explains every card in their own voice — and cheers you on through tough sessions.",
+    "Each vibe completely changes the look and feel. Click any option to preview it live — you can always switch later.",
+  ];
+
+  const currentPals = PALETTES[chosenVibe] || PALETTES.retro;
+
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:20 }}>
-      <Panel title={`SETUP ${step+1}/3`} controls={false} style={{ width:"min(540px,100%)", animation:"fadeUp .3s ease" }}>
-        <div style={{ padding:"28px 28px 20px" }}>
-          <div style={{ fontFamily:C.fontUI, fontSize:step===0?12:10, color:C.border, marginBottom:10 }}>{steps[step].title}</div>
-          <div style={{ fontFamily:C.fontContent, fontSize:C.contentSize-2, color:C.textSub, marginBottom:24, lineHeight:1.5 }}>{steps[step].body}</div>
+    <div style={{ position:"fixed", inset:0, background:C.bg, display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:"20px" }}>
+      {/* Big full-screen onboarding card */}
+      <div style={{ width:"100%", maxWidth:860, background:C.panel, border:`2px solid ${C.border}`, borderRadius:C.radius*2, boxShadow:C.chrome==="neon"?`0 0 40px ${C.border}66`:`8px 8px 0 ${C.border}`, animation:"fadeUp .3s ease", display:"flex", flexDirection:"column", maxHeight:"92vh", overflow:"hidden" }}>
 
-          {step === 1 && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:10, marginBottom:20 }}>
-              {Object.values(COMPANIONS).map((c) => (
-                <div key={c.id} onClick={()=>setChosenCompanion(c.id)}
-                  style={{ cursor:"pointer", textAlign:"center", padding:"12px 6px", border:`2px solid ${chosenCompanion===c.id?c.color:C.border+"44"}`, background:chosenCompanion===c.id?`${c.color}18`:"transparent", borderRadius:C.radius, transition:"all .15s" }}>
-                  <CompanionSVG id={c.id} size={52} mood="idle" />
-                  <div style={{ fontFamily:C.fontUI, fontSize:6, color:chosenCompanion===c.id?c.color:C.textSub, marginTop:6, lineHeight:1.4 }}>{c.name}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {step === 2 && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginBottom:20 }}>
-              {Object.entries(VIBES).map(([key, vibe]) => (
-                <div key={key} onClick={()=>setChosenVibe(key)}
-                  style={{ cursor:"pointer", textAlign:"center", padding:"12px 4px", border:`2px solid ${chosenVibe===key?C.border:C.border+"33"}`, background:chosenVibe===key?`${C.border}18`:"transparent", borderRadius:4, transition:"all .15s" }}>
-                  <div style={{ fontSize:20, marginBottom:6 }}>{vibe.icon}</div>
-                  <div style={{ fontFamily:C.fontUI, fontSize:6, color:C.textSub, lineHeight:1.4 }}>{vibe.name}</div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-            {step > 0 && <Btn onClick={()=>setStep(s=>s-1)} color={C.textSub}>← Back</Btn>}
-            {step < 2 && <Btn onClick={()=>setStep(s=>s+1)} color={C.border}>Next →</Btn>}
-            {step === 2 && <Btn onClick={handleDone} color={C.green}>Start studying →</Btn>}
+        {/* Header */}
+        <div style={{ background:C.border, padding:"20px 32px", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
+          <div style={{ fontFamily:C.fontUI, fontSize:Math.min(C.uiSize+4, 18), color:"#fff" }}>
+            MEMORYFORGE SETUP — Step {step+1} of 3
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            {[0,1,2].map(i=>(
+              <div key={i} style={{ width:32, height:8, background:i<=step?"#fff":"#ffffff44", borderRadius:4, transition:"background .2s" }} />
+            ))}
           </div>
         </div>
-      </Panel>
+
+        {/* Scrollable body */}
+        <div style={{ flex:1, overflowY:"auto", padding:"36px 40px" }}>
+          <div style={{ fontFamily:C.fontUI, fontSize:Math.min(C.uiSize+8, 26), color:C.border, marginBottom:12, lineHeight:1.4 }}>
+            {stepTitles[step]}
+          </div>
+          <div style={{ fontFamily:C.fontContent, fontSize:Math.max(C.contentSize, 18), color:C.textSub, marginBottom:36, lineHeight:1.6, maxWidth:600 }}>
+            {stepSubs[step]}
+          </div>
+
+          {/* STEP 0 — Welcome splash with all 5 companions waving */}
+          {step === 0 && (
+            <div style={{ display:"flex", gap:24, justifyContent:"center", flexWrap:"wrap" }}>
+              {Object.values(COMPANIONS).map((c,i)=>(
+                <div key={c.id} style={{ textAlign:"center", animation:`fadeUp .4s ease ${i*0.08}s both` }}>
+                  <div style={{ animation:"bob 2s ease-in-out infinite", animationDelay:`${i*0.3}s` }}>
+                    <CompanionSVG id={c.id} size={90} mood="idle" />
+                  </div>
+                  <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize, 9), color:COMPANIONS[c.id].color, marginTop:10 }}>{c.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* STEP 1 — Companion picker */}
+          {step === 1 && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(140px, 1fr))", gap:16, marginBottom:12 }}>
+              {Object.values(COMPANIONS).map((c) => {
+                const active = chosenCompanion === c.id;
+                return (
+                  <div key={c.id} onClick={()=>setChosenCompanion(c.id)}
+                    style={{ cursor:"pointer", textAlign:"center", padding:"24px 16px", border:`3px solid ${active?c.color:C.border+"33"}`, background:active?`${c.color}18`:C.raised, borderRadius:C.radius*2, transition:"all .15s", transform:active?"scale(1.04)":"scale(1)" }}>
+                    <CompanionSVG id={c.id} size={80} mood={active?"correct":"idle"} />
+                    <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize, 9), color:active?c.color:C.text, marginTop:14, marginBottom:6 }}>{c.name}</div>
+                    <div style={{ fontFamily:"monospace", fontSize:13, color:C.textSub, lineHeight:1.5 }}>{c.tagline}</div>
+                    {active && <div style={{ marginTop:10, fontFamily:"monospace", fontSize:12, color:c.color }}>✓ Selected</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* STEP 2 — Vibe + palette picker with live preview */}
+          {step === 2 && (
+            <div>
+              {/* Vibe tiles */}
+              <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize,11), color:C.text, marginBottom:14 }}>Visual style</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:12, marginBottom:32 }}>
+                {Object.entries(VIBES).map(([key, vibe]) => {
+                  const pal = Object.values(PALETTES[key])[0];
+                  const active = chosenVibe === key;
+                  return (
+                    <div key={key} onClick={()=>handleVibeClick(key)}
+                      style={{ cursor:"pointer", textAlign:"center", padding:"18px 8px", border:`3px solid ${active?C.border:C.border+"33"}`, background:active?`${C.border}18`:pal.bg, borderRadius:C.radius*2, transition:"all .15s", transform:active?"scale(1.05)":"scale(1)" }}>
+                      <div style={{ fontSize:28, marginBottom:10 }}>{vibe.icon}</div>
+                      <div style={{ fontFamily:"monospace", fontSize:13, color:active?C.border:C.text, fontWeight:600, marginBottom:4 }}>{vibe.name}</div>
+                      <div style={{ fontFamily:"monospace", fontSize:11, color:C.textHint, lineHeight:1.4 }}>{vibe.desc}</div>
+                      {active && <div style={{ marginTop:8, fontFamily:"monospace", fontSize:11, color:C.border }}>✓ Active</div>}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Palette tiles */}
+              <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize,11), color:C.text, marginBottom:14 }}>Color palette</div>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+                {Object.entries(currentPals).map(([key, pal]) => {
+                  const active = chosenPalette === key;
+                  return (
+                    <div key={key} onClick={()=>handlePaletteClick(key)}
+                      style={{ cursor:"pointer", border:`3px solid ${active?pal.border:pal.border+"33"}`, borderRadius:C.radius*2, overflow:"hidden", transition:"all .15s", transform:active?"scale(1.04)":"scale(1)" }}>
+                      <div style={{ background:pal.bg, padding:"14px 16px" }}>
+                        <div style={{ background:pal.border, padding:"6px 10px", borderRadius:4, marginBottom:8, display:"inline-block" }}>
+                          <div style={{ fontFamily:"monospace", fontSize:11, color:"#fff" }}>Window</div>
+                        </div>
+                        <div style={{ display:"flex", gap:6 }}>
+                          {[pal.green,pal.pink,pal.gold,pal.purple].map((col,i)=>(
+                            <div key={i} style={{ width:16,height:16,background:col,borderRadius:"50%" }} />
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ background:pal.panel, padding:"10px 14px" }}>
+                        <div style={{ fontFamily:"monospace", fontSize:13, color:pal.text, fontWeight:600 }}>{pal.name}</div>
+                        {active && <div style={{ fontFamily:"monospace", fontSize:11, color:pal.border, marginTop:2 }}>✓ Selected</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer nav */}
+        <div style={{ borderTop:`2px solid ${C.border}22`, padding:"20px 40px", display:"flex", gap:12, justifyContent:"flex-end", flexShrink:0 }}>
+          {step > 0 && (
+            <Btn onClick={()=>setStep(s=>s-1)} color={C.textSub} style={{ fontSize:14, padding:"12px 24px" }}>← Back</Btn>
+          )}
+          {step < 2 && (
+            <Btn onClick={()=>setStep(s=>s+1)} color={C.border} style={{ fontSize:14, padding:"12px 32px" }}>Continue →</Btn>
+          )}
+          {step === 2 && (
+            <Btn onClick={handleDone} color={C.green} style={{ fontSize:14, padding:"12px 32px" }}>Let's go →</Btn>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1122,7 +1222,7 @@ function DashboardView({ cards, decks, categories, studyConfig, setStudyConfig, 
 // ─────────────────────────────────────────────────────────────
 // STUDY VIEW
 // ─────────────────────────────────────────────────────────────
-function StudyView({ cards, decks, studyConfig, onCardUpdate, companionOpen, setCompanionOpen, companionId, userId }) {
+function StudyView({ cards, decks, studyConfig, onCardUpdate, companionOpen, setCompanionOpen, companionId, userId, navTo }) {
   const C = useC();
   const [queue, setQueue] = useState([]);
   const [idx, setIdx]     = useState(0);
@@ -1196,8 +1296,8 @@ function StudyView({ cards, decks, studyConfig, onCardUpdate, companionOpen, set
               ))}
             </div>
             <div style={{ display:"flex", gap:10 }}>
-              <Btn onClick={()=>window.location.reload()} color={C.border} style={{ flex:1, textAlign:"center", display:"block" }}>Study Again</Btn>
-              <Btn onClick={()=>window.history.back()} color={C.green} style={{ flex:1, textAlign:"center", display:"block" }}>← Dashboard</Btn>
+              <Btn onClick={()=>{ setDone(false); setIdx(0); setFlipped(false); setShowRate(false); setStats({again:0,hard:0,good:0,easy:0}); const pool2=[...queue]; setQueue(studyConfig.shuffle?pool2.sort(()=>Math.random()-.5):pool2); }} color={C.border} style={{ flex:1, textAlign:"center", display:"block" }}>Study Again</Btn>
+              <Btn onClick={()=>navTo("dashboard")} color={C.green} style={{ flex:1, textAlign:"center", display:"block" }}>← Dashboard</Btn>
             </div>
           </div>
         </Panel>
@@ -1342,10 +1442,18 @@ function CreatorView({ cards, decks, onCardCreate, onCardUpdate, editingCard, se
   const handleCSVParse = () => {
     const lines = csvText.trim().split("\n").filter(Boolean);
     const parsed = lines.map(line => {
-      const idx = line.indexOf(",");
-      if (idx === -1) return null;
-      return { front: line.slice(0, idx).trim().replace(/^"|"$/g,""), back: line.slice(idx+1).trim().replace(/^"|"$/g,"") };
-    }).filter(Boolean);
+      // Try tab-separated first (Quizlet export format)
+      const tabIdx = line.indexOf("\t");
+      if (tabIdx !== -1) {
+        return { front: line.slice(0, tabIdx).trim(), back: line.slice(tabIdx+1).trim() };
+      }
+      // Fall back to comma-separated CSV
+      const commaIdx = line.indexOf(",");
+      if (commaIdx !== -1) {
+        return { front: line.slice(0, commaIdx).trim().replace(/^"|"$/g,""), back: line.slice(commaIdx+1).trim().replace(/^"|"$/g,"") };
+      }
+      return null;
+    }).filter(c => c && c.front && c.back);
     setCsvPreview(parsed);
   };
 
@@ -1417,30 +1525,57 @@ function CreatorView({ cards, decks, onCardCreate, onCardUpdate, editingCard, se
       )}
 
       {tab === "csv" && (
-        <Panel title="CSV IMPORT">
+        <Panel title="IMPORT CARDS">
           <div style={{ padding:"20px", display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ fontFamily:"monospace", fontSize:12, color:C.textSub, background:C.raised, padding:"10px 14px", borderRadius:C.radius, lineHeight:1.8 }}>
-              Format: <code>front text,back text</code> (one per line)<br/>
-              Example: <code>What is mitosis?,Cell division producing two identical cells</code>
+
+            {/* Quizlet import instructions */}
+            <div style={{ background:`${C.accent}18`, border:`2px solid ${C.accent}44`, borderRadius:C.radius, padding:"14px 16px" }}>
+              <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize,10), color:C.accent, marginBottom:8 }}>📥 IMPORT FROM QUIZLET (FREE)</div>
+              <div style={{ fontFamily:"monospace", fontSize:14, color:C.text, lineHeight:1.9 }}>
+                1. Open your Quizlet set<br/>
+                2. Click <strong>···</strong> → <strong>Export</strong><br/>
+                3. Set: <em>Tab</em> between term/def · <em>New line</em> between rows<br/>
+                4. Click <strong>Copy text</strong> and paste below
+              </div>
             </div>
+
+            <div style={{ fontFamily:"monospace", fontSize:13, color:C.textSub, background:C.raised, padding:"10px 14px", borderRadius:C.radius, lineHeight:1.8 }}>
+              Also accepts <strong>CSV</strong>: <code>front,back</code> (one per line)<br/>
+              Example: <code>What is mitosis?[tab]Cell division into two identical cells</code>
+            </div>
+
             <div>
-              <div style={{ fontFamily:C.fontUI, fontSize:C.uiSize-1, color:C.text, marginBottom:6 }}>DECK</div>
-              <select value={deckId} onChange={e=>setDeckId(e.target.value)} style={{ width:"100%", marginBottom:10, borderRadius:C.radius }}>
+              <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize-1,10), color:C.text, marginBottom:8 }}>Deck (optional)</div>
+              <select value={deckId} onChange={e=>setDeckId(e.target.value)} style={{ width:"100%", marginBottom:4, borderRadius:C.radius }}>
                 <option value="">No deck</option>
                 {decks.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </div>
-            <textarea value={csvText} onChange={e=>{ setCsvText(e.target.value); setCsvPreview([]); }} rows={8} placeholder={"capital of France,Paris\nH2O formula,Water\nNewton's first law,An object in motion stays in motion..."} style={{ width:"100%", fontFamily:"monospace", borderRadius:C.radius }} />
+
+            <textarea value={csvText} onChange={e=>{ setCsvText(e.target.value); setCsvPreview([]); }} rows={10}
+              placeholder={"Paste Quizlet export here (tab-separated)\nor CSV (comma-separated):\n\nCapital of France\tParis\nH₂O\tWater\nNewton's first law\tAn object in motion stays in motion..."}
+              style={{ width:"100%", fontFamily:"monospace", fontSize:14, borderRadius:C.radius }} />
+
             <div style={{ display:"flex", gap:10 }}>
-              <Btn onClick={handleCSVParse} color={C.accent} disabled={!csvText.trim()}>Preview ({csvText.trim().split("\n").filter(Boolean).length} cards)</Btn>
-              {csvPreview.length > 0 && <Btn onClick={handleCSVImport} color={C.green}>{csvImported?"✓ Imported!": `Import ${csvPreview.length} Cards`}</Btn>}
+              <Btn onClick={handleCSVParse} color={C.accent} disabled={!csvText.trim()}>
+                Preview ({csvText.trim().split("\n").filter(Boolean).length} cards)
+              </Btn>
+              {csvPreview.length > 0 && (
+                <Btn onClick={handleCSVImport} color={C.green}>
+                  {csvImported ? "✓ Imported!" : `Import ${csvPreview.length} cards`}
+                </Btn>
+              )}
             </div>
+
             {csvPreview.length > 0 && (
-              <div style={{ maxHeight:300, overflowY:"auto" }}>
+              <div style={{ maxHeight:320, overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ fontFamily:C.fontUI, fontSize:Math.max(C.uiSize-1,10), color:C.textSub, marginBottom:4 }}>
+                  Preview — {csvPreview.length} cards
+                </div>
                 {csvPreview.map((c,i)=>(
-                  <div key={i} style={{ display:"flex", gap:8, marginBottom:6, fontFamily:"monospace", fontSize:12 }}>
-                    <div style={{ flex:1, padding:"6px 10px", background:C.raised, borderRadius:C.radius, color:C.text }}>{c.front}</div>
-                    <div style={{ flex:1, padding:"6px 10px", background:C.raised, borderRadius:C.radius, color:C.textSub }}>{c.back}</div>
+                  <div key={i} style={{ display:"flex", gap:8, fontFamily:"monospace", fontSize:14 }}>
+                    <div style={{ flex:1, padding:"8px 12px", background:C.raised, borderRadius:C.radius, color:C.text, borderLeft:`3px solid ${C.accent}` }}>{c.front}</div>
+                    <div style={{ flex:1, padding:"8px 12px", background:C.raised, borderRadius:C.radius, color:C.textSub }}>{c.back}</div>
                   </div>
                 ))}
               </div>
@@ -1857,14 +1992,17 @@ export default function MemoryForge() {
     return ()=>subscription.unsubscribe();
   },[]);
 
+  const loadedUidRef = useRef(null);
   useEffect(()=>{
     if (!session) return;
     const uid = session.user.id;
-    // Load streak + companion from localStorage
+    // Only run once per user ID — prevents Supabase token refresh from re-triggering full reload
+    if (loadedUidRef.current === uid) return;
+    loadedUidRef.current = uid;
+
     setStreak(Streak.get(uid));
     const savedCompanion = localStorage.getItem(`mf_companion_${uid}`);
     if (savedCompanion) setCompanionId(savedCompanion);
-    // Check onboarding
     if (!localStorage.getItem(`mf_onboarded_${uid}`)) setShowOnboarding(true);
 
     (async()=>{
@@ -1878,7 +2016,7 @@ export default function MemoryForge() {
       } catch(e) { console.error(e); }
       setDataLoading(false);
     })();
-  },[session]);
+  },[session?.user?.id]);
 
   const updateTheme = useCallback((newConfig)=>{
     setThemeConfig(newConfig);
@@ -1947,11 +2085,11 @@ export default function MemoryForge() {
 
   return (
     <ThemeCtx.Provider value={C}>
-      <div style={{ display:"flex", minHeight:"100vh", background:C.bg, fontFamily:"monospace", transition:"background .3s, color .3s" }}>
+      <div style={{ display:"flex", height:"100vh", width:"100vw", background:C.bg, fontFamily:"monospace", transition:"background .3s, color .3s", overflow:"hidden", position:"fixed", top:0, left:0 }}>
         <style>{`
           ${fontImport}
           ${vibeEffects}
-          @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
+          html,body,#root{height:100%;width:100%;margin:0;padding:0;overflow:hidden}
           *{box-sizing:border-box;margin:0;padding:0}
           ::-webkit-scrollbar{width:8px}
           ::-webkit-scrollbar-track{background:${C.bg}}
@@ -1959,7 +2097,7 @@ export default function MemoryForge() {
           input,textarea,select{
             font-family:${C.chrome==="soft"?"inherit":"monospace"};
             background:${C.raised};border:${C.chrome==="soft"?`1px solid ${C.border}33`:`2px solid ${C.border}`};
-            color:${C.text};padding:8px 10px;font-size:13px;outline:none;
+            color:${C.text};padding:10px 14px;font-size:15px;outline:none;
             border-radius:${C.radius}px;
           }
           input:focus,textarea:focus,select:focus{
@@ -2085,9 +2223,9 @@ export default function MemoryForge() {
         </aside>
 
         {/* Main */}
-        <main style={{ flex:1, overflow:"auto", minWidth:0, position:"relative", zIndex:1 }}>
+        <main style={{ flex:1, overflowY:"auto", overflowX:"hidden", minWidth:0, position:"relative", zIndex:1, height:"100%" }}>
           {view==="dashboard" && <DashboardView cards={cards} decks={decks} categories={categories} studyConfig={studyConfig} setStudyConfig={setStudyConfig} navTo={navTo} onPublish={publishDeck} onCreateDeck={createDeck} onUpdateDeck={updateDeck} onDeleteDeck={deleteDeck} onCreateCategory={createCategory} onUpdateCategory={updateCategory} onDeleteCategory={deleteCategory} streak={streak} companionId={companionId} userId={user.id} />}
-          {view==="study"     && <StudyView cards={cards} decks={decks} studyConfig={studyConfig} onCardUpdate={updateCard} companionOpen={companionOpen} setCompanionOpen={setCompanionOpen} companionId={companionId} userId={user.id} />}
+          {view==="study"     && <StudyView cards={cards} decks={decks} studyConfig={studyConfig} onCardUpdate={updateCard} companionOpen={companionOpen} setCompanionOpen={setCompanionOpen} companionId={companionId} userId={user.id} navTo={navTo} />}
           {view==="stats"     && <StatsView cards={cards} decks={decks} companionId={companionId} />}
           {view==="discover"  && <DiscoverView onImport={importDeck} userId={user.id} categories={categories} />}
           {view==="creator"   && <CreatorView cards={cards} decks={decks} onCardCreate={createCard} onCardUpdate={updateCard} editingCard={editingCard} setEditingCard={setEditingCard} />}
